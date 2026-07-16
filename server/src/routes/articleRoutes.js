@@ -9,7 +9,10 @@ import {
   publishMine,
   updateMine,
 } from "../controllers/articleController.js";
-import { protect } from "../middleware/authMiddleware.js";
+import {
+  optionalProtect,
+  protect,
+} from "../middleware/authMiddleware.js";
 import { validateRequest } from "../middleware/validateRequest.js";
 import {
   articleIdSchema,
@@ -27,6 +30,14 @@ import {
   articleContributionListSchema,
   submitContributionSchema,
 } from "../validators/contributionValidators.js";
+import {
+  getVersion,
+  listVersions,
+} from "../controllers/versionController.js";
+import {
+  versionDetailSchema,
+  versionListSchema,
+} from "../validators/versionValidators.js";
 
 const router = Router();
 
@@ -87,6 +98,20 @@ router.get(
     articleContributionListSchema
   ),
   listForArticle
+);
+
+router.get(
+  "/:articleId/versions",
+  optionalProtect,
+  validateRequest(versionListSchema),
+  listVersions
+);
+
+router.get(
+  "/:articleId/versions/:versionNumber",
+  optionalProtect,
+  validateRequest(versionDetailSchema),
+  getVersion
 );
 
 router.get(
