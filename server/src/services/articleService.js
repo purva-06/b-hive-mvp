@@ -1,35 +1,58 @@
 import mongoose from "mongoose";
 
+import {
+  ARTICLE_SORT,
+  ARTICLE_STATUS,
+  ARTICLE_VERSION_CHANGE_TYPE,
+} from "../constants/articleConstants.js";
+
 import { Article } from "../models/Article.js";
 import { ArticleVersion } from "../models/ArticleVersion.js";
+
 import { ApiError } from "../utils/ApiError.js";
 import { generateUniqueSlug } from "../utils/generateSlug.js";
 
-function buildPagination(page, limit, totalItems) {
-  const totalPages = Math.ceil(totalItems / limit);
+import {
+  buildPagination,
+  getPaginationValues,
+} from "../utils/pagination.js";
 
-  return {
-    page,
-    limit,
-    totalItems,
-    totalPages,
-    hasNextPage: page < totalPages,
-    hasPreviousPage: page > 1,
-  };
-}
-
-function getSort(sort) {
+function getArticleSort(sort) {
   const options = {
-    newest: { publishedAt: -1, createdAt: -1 },
-    oldest: { publishedAt: 1, createdAt: 1 },
-    recently_updated: { updatedAt: -1 },
+    [ARTICLE_SORT.NEWEST]: {
+      publishedAt: -1,
+      createdAt: -1,
+    },
+
+    [ARTICLE_SORT.OLDEST]: {
+      publishedAt: 1,
+      createdAt: 1,
+    },
+
+    [ARTICLE_SORT.RECENTLY_UPDATED]: {
+      updatedAt: -1,
+    },
   };
 
-  return options[sort];
+  return options[sort] ?? options[ARTICLE_SORT.NEWEST];
 }
 
-async function findOwnedArticle(articleId, userId, session = null) {
-  const article = await Article.findById(articleId).session(session);
+function escapeRegularExpression(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function findOwnedArticle(
+  articleId,
+  userId,
+  session = null
+) {
+  const articleQuery = Article.findById(articleId);
+
+  if (session) {
+    articleQuery.session(session);
+  }
+
+  const article = await articleQuery;
 
   if (!article) {
     throw new ApiError(404, "Article not found.", [
@@ -40,13 +63,21 @@ async function findOwnedArticle(articleId, userId, session = null) {
     ]);
   }
 
-  if (article.publisher.toString() !== userId.toString()) {
-    throw new ApiError(403, "You are not allowed to modify this article.", [
-      {
-        code: "ARTICLE_OWNERSHIP_REQUIRED",
-        message: "Only the article publisher may perform this action.",
-      },
-    ]);
+  if (
+    article.publisher.toString() !==
+    userId.toString()
+  ) {
+    throw new ApiError(
+      403,
+      "You are not allowed to modify this article.",
+      [
+        {
+          code: "ARTICLE_OWNERSHIP_REQUIRED",
+          message:
+            "Only the article publisher may perform this action.",
+        },
+      ]
+    );
   }
 
   return article;
@@ -59,19 +90,26 @@ export async function createArticle(userId, input) {
     let createdArticle;
 
     await session.withTransaction(async () => {
-      const slug = await generateUniqueSlug(input.title, session);
+      const slug = await generateUniqueSlug(
+        input.title,
+        session
+      );
 
       const [article] = await Article.create(
         [
           {
-            ...input,
+            title: input.title,
+            summary: input.summary,
+            content: input.content,
             slug,
             publisher: userId,
-            status: "draft",
+            status: ARTICLE_STATUS.DRAFT,
             currentVersion: 1,
           },
         ],
-        { session }
+        {
+          session,
+        }
       );
 
       await ArticleVersion.create(
@@ -83,11 +121,17 @@ export async function createArticle(userId, input) {
             summary: article.summary,
             content: article.content,
             createdBy: userId,
-            changeType: "initial",
-            changeDescription: "Initial article version",
+            approvedBy: null,
+            sourceContribution: null,
+            changeType:
+              ARTICLE_VERSION_CHANGE_TYPE.INITIAL,
+            changeDescription:
+              "Initial article version",
           },
         ],
-        { session }
+        {
+          session,
+        }
       );
 
       createdArticle = article;
@@ -99,18 +143,27 @@ export async function createArticle(userId, input) {
   }
 }
 
-export async function listPublishedArticles({
-  page,
-  limit,
-  sort,
-  search,
-}) {
+export async function listPublishedArticles(
+  query = {}
+) {
+  const {
+    page,
+    limit,
+    skip,
+  } = getPaginationValues(query);
+
+  const {
+    sort = ARTICLE_SORT.NEWEST,
+    search,
+  } = query;
+
   const filter = {
-    status: "published",
+    status: ARTICLE_STATUS.PUBLISHED,
   };
 
   if (search) {
-    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const escapedSearch =
+      escapeRegularExpression(search);
 
     filter.$or = [
       {
@@ -128,40 +181,50 @@ export async function listPublishedArticles({
     ];
   }
 
-  const skip = (page - 1) * limit;
+  const [articles, totalItems] =
+    await Promise.all([
+      Article.find(filter)
+        .populate("publisher", "name bio")
+        .sort(getArticleSort(sort))
+        .skip(skip)
+        .limit(limit)
+        .lean(),
 
-  const [articles, totalItems] = await Promise.all([
-    Article.find(filter)
-      .populate("publisher", "name bio")
-      .sort(getSort(sort))
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-
-    Article.countDocuments(filter),
-  ]);
+      Article.countDocuments(filter),
+    ]);
 
   return {
     articles,
-    pagination: buildPagination(page, limit, totalItems),
+    pagination: buildPagination({
+      page,
+      limit,
+      totalItems,
+    }),
   };
 }
 
-export async function getPublishedArticleBySlug(slug) {
+export async function getPublishedArticleBySlug(
+  slug
+) {
   const article = await Article.findOne({
     slug,
-    status: "published",
+    status: ARTICLE_STATUS.PUBLISHED,
   })
     .populate("publisher", "name bio")
     .lean();
 
   if (!article) {
-    throw new ApiError(404, "Published article not found.", [
-      {
-        code: "ARTICLE_NOT_FOUND",
-        message: "Published article not found.",
-      },
-    ]);
+    throw new ApiError(
+      404,
+      "Published article not found.",
+      [
+        {
+          code: "ARTICLE_NOT_FOUND",
+          message:
+            "Published article not found.",
+        },
+      ]
+    );
   }
 
   return article;
@@ -169,8 +232,19 @@ export async function getPublishedArticleBySlug(slug) {
 
 export async function listOwnedArticles(
   userId,
-  { page, limit, sort, status }
+  query = {}
 ) {
+  const {
+    page,
+    limit,
+    skip,
+  } = getPaginationValues(query);
+
+  const {
+    sort = ARTICLE_SORT.NEWEST,
+    status,
+  } = query;
+
   const filter = {
     publisher: userId,
   };
@@ -179,21 +253,24 @@ export async function listOwnedArticles(
     filter.status = status;
   }
 
-  const skip = (page - 1) * limit;
+  const [articles, totalItems] =
+    await Promise.all([
+      Article.find(filter)
+        .sort(getArticleSort(sort))
+        .skip(skip)
+        .limit(limit)
+        .lean(),
 
-  const [articles, totalItems] = await Promise.all([
-    Article.find(filter)
-      .sort(getSort(sort))
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-
-    Article.countDocuments(filter),
-  ]);
+      Article.countDocuments(filter),
+    ]);
 
   return {
     articles,
-    pagination: buildPagination(page, limit, totalItems),
+    pagination: buildPagination({
+      page,
+      limit,
+      totalItems,
+    }),
   };
 }
 
@@ -214,22 +291,32 @@ export async function updateOwnedArticle(
         session
       );
 
-      const nextTitle = input.title ?? article.title;
-      const nextSummary = input.summary ?? article.summary;
-      const nextContent = input.content ?? article.content;
+      const nextTitle =
+        input.title ?? article.title;
 
-      const contentChanged =
+      const nextSummary =
+        input.summary ?? article.summary;
+
+      const nextContent =
+        input.content ?? article.content;
+
+      const articleChanged =
         nextTitle !== article.title ||
         nextSummary !== article.summary ||
         nextContent !== article.content;
 
-      if (!contentChanged) {
-        throw new ApiError(400, "No article changes were provided.", [
-          {
-            code: "NO_ARTICLE_CHANGES",
-            message: "The supplied values match the current article.",
-          },
-        ]);
+      if (!articleChanged) {
+        throw new ApiError(
+          400,
+          "No article changes were provided.",
+          [
+            {
+              code: "NO_ARTICLE_CHANGES",
+              message:
+                "The supplied values match the current article.",
+            },
+          ]
+        );
       }
 
       article.title = nextTitle;
@@ -237,23 +324,32 @@ export async function updateOwnedArticle(
       article.content = nextContent;
       article.currentVersion += 1;
 
-      await article.save({ session });
+      await article.save({
+        session,
+      });
 
       await ArticleVersion.create(
         [
           {
             article: article._id,
-            versionNumber: article.currentVersion,
+            versionNumber:
+              article.currentVersion,
             title: article.title,
             summary: article.summary,
             content: article.content,
             createdBy: userId,
-            changeType: "manual_edit",
+            approvedBy: null,
+            sourceContribution: null,
+            changeType:
+              ARTICLE_VERSION_CHANGE_TYPE.MANUAL_EDIT,
             changeDescription:
-              input.changeDescription || "Article manually updated",
+              input.changeDescription ||
+              "Article manually updated",
           },
         ],
-        { session }
+        {
+          session,
+        }
       );
 
       updatedArticle = article;
@@ -265,19 +361,32 @@ export async function updateOwnedArticle(
   }
 }
 
-export async function publishOwnedArticle(articleId, userId) {
-  const article = await findOwnedArticle(articleId, userId);
+export async function publishOwnedArticle(
+  articleId,
+  userId
+) {
+  const article = await findOwnedArticle(
+    articleId,
+    userId
+  );
 
-  if (article.status === "published") {
-    throw new ApiError(409, "Article is already published.", [
-      {
-        code: "ARTICLE_ALREADY_PUBLISHED",
-        message: "Article is already published.",
-      },
-    ]);
+  if (
+    article.status === ARTICLE_STATUS.PUBLISHED
+  ) {
+    throw new ApiError(
+      409,
+      "Article is already published.",
+      [
+        {
+          code: "ARTICLE_ALREADY_PUBLISHED",
+          message:
+            "Article is already published.",
+        },
+      ]
+    );
   }
 
-  article.status = "published";
+  article.status = ARTICLE_STATUS.PUBLISHED;
   article.archivedAt = null;
 
   if (!article.publishedAt) {
@@ -289,19 +398,32 @@ export async function publishOwnedArticle(articleId, userId) {
   return article;
 }
 
-export async function archiveOwnedArticle(articleId, userId) {
-  const article = await findOwnedArticle(articleId, userId);
+export async function archiveOwnedArticle(
+  articleId,
+  userId
+) {
+  const article = await findOwnedArticle(
+    articleId,
+    userId
+  );
 
-  if (article.status === "archived") {
-    throw new ApiError(409, "Article is already archived.", [
-      {
-        code: "ARTICLE_ALREADY_ARCHIVED",
-        message: "Article is already archived.",
-      },
-    ]);
+  if (
+    article.status === ARTICLE_STATUS.ARCHIVED
+  ) {
+    throw new ApiError(
+      409,
+      "Article is already archived.",
+      [
+        {
+          code: "ARTICLE_ALREADY_ARCHIVED",
+          message:
+            "Article is already archived.",
+        },
+      ]
+    );
   }
 
-  article.status = "archived";
+  article.status = ARTICLE_STATUS.ARCHIVED;
   article.archivedAt = new Date();
 
   await article.save();

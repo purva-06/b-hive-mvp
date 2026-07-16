@@ -19,6 +19,14 @@ import {
   myArticlesSchema,
   updateArticleSchema,
 } from "../validators/articleValidators.js";
+import {
+  listForArticle,
+  submit,
+} from "../controllers/contributionController.js";
+import {
+  articleContributionListSchema,
+  submitContributionSchema,
+} from "../validators/contributionValidators.js";
 
 const router = Router();
 
@@ -61,6 +69,24 @@ router.patch(
   protect,
   validateRequest(articleIdSchema),
   archiveMine
+);
+
+router.post(
+  "/:articleId/contributions",
+  protect,
+  validateRequest(
+    submitContributionSchema
+  ),
+  submit
+);
+
+router.get(
+  "/:articleId/contributions",
+  protect,
+  validateRequest(
+    articleContributionListSchema
+  ),
+  listForArticle
 );
 
 router.get(

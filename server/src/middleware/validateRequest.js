@@ -11,24 +11,26 @@ export function validateRequest(schema) {
         success: false,
         message: "Validation failed.",
         errors: result.error.issues.map((issue) => ({
-          field: issue.path.join(".").replace(/^body\./, ""),
+          field: issue.path
+            .join(".")
+            .replace(/^body\./, "")
+            .replace(/^params\./, "")
+            .replace(/^query\./, ""),
           code: issue.code.toUpperCase(),
           message: issue.message,
         })),
       });
     }
 
-    if (result.data.body) {
-      req.body = result.data.body;
-    }
+    req.validated = {
+      body: result.data.body ?? req.body,
+      params: result.data.params ?? req.params,
+      query: result.data.query ?? {},
+    };
 
-    if (result.data.params) {
-      req.params = result.data.params;
-    }
+    req.body = req.validated.body;
 
-    if (result.data.query) {
-      req.query = result.data.query;
-    }
+    Object.assign(req.params, req.validated.params);
 
     next();
   };

@@ -10,6 +10,7 @@ import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import authRoutes from "./routes/authRoutes.js";
 import articleRoutes from "./routes/articleRoutes.js";
+import contributionRoutes from "./routes/contributionRoutes.js";
 
 const app = express();
 
@@ -51,6 +52,10 @@ app.get("/", (req, res) => {
 app.use("/api/health", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/articles", articleRoutes);
+app.use(
+  "/api/contributions",
+  contributionRoutes
+);
 
 app.use(notFound);
 app.use(errorHandler);
