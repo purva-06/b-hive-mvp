@@ -1,362 +1,519 @@
 # B HIVE MVP
 
-> **A Git-inspired collaborative knowledge contribution platform built with the MERN stack.**
+> A Git-inspired collaborative publishing platform for proposing, reviewing, merging, and attributing improvements to written knowledge.
 
-B HIVE enables collaborative improvement of knowledge through structured contribution requests instead of direct editing. Every registered user can publish their own articles and contribute improvements to articles owned by other users. Accepted contributions update the article while preserving complete version history.
+B HIVE is a full-stack MERN application where users publish Markdown articles and other users propose complete revisions through structured contribution requests. Article owners retain editorial control: they can compare current and proposed content, accept or reject a request, or ask the contributor to revise it.
 
----
+When a contribution is accepted, B HIVE updates the article and creates an immutable version record so that previous content, contributor attribution, and review history remain available.
 
-# Project Status
+## Project Status
 
-> 🚧 **Backend Development Phase**
+B HIVE is under active MVP development.
 
-The current focus is building a production-style REST API before developing the React frontend.
+The `develop` branch currently contains:
 
----
+- a Node.js, Express, MongoDB, and Mongoose REST API;
+- JWT authentication and ownership-based authorization;
+- article creation, editing, publication, unpublishing, and archival;
+- contribution submission, review, revision, withdrawal, and merging;
+- immutable article version history and stale-version conflict protection;
+- a React 19 and Vite frontend;
+- React Router-based public and protected routes;
+- Axios API modules and global authentication state;
+- Markdown rendering and article/contribution/version interfaces.
 
-# Problem Statement
+The project is not yet a production release. Automated test coverage, deployment configuration, accessibility review, and final workflow verification remain in progress.
 
-Readers often identify opportunities to improve published content by:
+## Problem Statement
 
-- clarifying explanations
-- correcting mistakes
-- updating outdated information
-- adding missing context
-- improving structure
-- fixing grammar and readability
+Readers frequently identify improvements to published knowledge:
 
-Traditional publishing platforms provide comments but rarely support a structured workflow for proposing, reviewing, and merging revisions while preserving attribution and history.
+- clearer explanations;
+- factual corrections;
+- updated information;
+- missing context;
+- improved structure;
+- stronger examples;
+- better grammar and readability.
 
-B HIVE explores a Git-inspired workflow for collaborative knowledge creation.
+Most publishing platforms provide either comments or direct editing. Comments describe a problem without supplying the complete revision. Direct editing can weaken author control, attribution, and historical traceability.
 
----
+B HIVE introduces a structured middle layer:
 
-# MVP Objective
+1. A contributor edits a copy of the current article.
+2. The contributor explains the proposed improvement.
+3. The article owner reviews the original and proposed versions.
+4. The owner accepts, rejects, or requests revisions.
+5. An accepted contribution becomes a new article version.
 
-The MVP validates one primary workflow:
+## MVP Objective
 
-1. A registered user publishes an article.
-2. Another registered user discovers it.
-3. They propose an improved version.
-4. They explain why the change is useful.
-5. The article owner reviews the proposal.
-6. The owner accepts, rejects, or requests changes.
-7. Accepted contributions update the article.
-8. Previous versions remain permanently available.
+The MVP validates one central hypothesis:
 
-The MVP intentionally focuses on this workflow before introducing advanced collaboration features.
+> Written knowledge can be improved collaboratively through a Git-inspired contribution workflow while preserving editorial ownership, contributor attribution, and complete version history.
 
----
+The primary end-to-end workflow is:
 
-# Ownership-Based Authorization
+1. A user registers or logs in.
+2. The user creates an article and saves it as a draft.
+3. The article owner publishes it.
+4. Another authenticated user discovers the article.
+5. The second user proposes an improved Markdown version.
+6. The article owner reviews the contribution.
+7. The owner accepts, rejects, or requests changes.
+8. If changes are requested, the contributor revises and resubmits.
+9. If accepted, the article content is updated.
+10. A new immutable article-version record is created.
 
-B HIVE does **not** assign permanent **Author** or **Contributor** roles.
+## Ownership-Based Authorization
 
-Every authenticated user can:
+B HIVE does **not** assign permanent `author` and `contributor` account roles.
 
-- publish their own articles
-- contribute to articles owned by others
+Every registered user can act as:
 
-Permissions are determined dynamically using:
+- a **publisher** for articles they own;
+- a **contributor** for published articles owned by other users.
 
-- authenticated user
-- article ownership
-- contribution ownership
-- article status
-- requested action
+Permissions are derived dynamically from:
 
----
+- the authenticated user;
+- article ownership;
+- contribution ownership;
+- article status;
+- contribution status;
+- the requested action.
 
-# User Actions
+Examples:
 
-## Publisher
+- only an article owner can edit, publish, unpublish, or archive that article;
+- a user cannot contribute to their own article;
+- only the original contributor can revise or withdraw a contribution;
+- only the target article owner can review a contribution;
+- accepted, rejected, and withdrawn contributions are terminal.
 
-When a user owns an article, they can:
+The frontend improves usability, but the backend remains the source of truth for authorization.
 
-- Create articles
-- Save drafts
-- Edit their own articles
-- Publish articles
-- Archive articles
-- Review contribution requests
-- Accept contributions
-- Reject contributions
-- Request revisions
-- View article version history
+## Core Features
 
-## Contributor
-
-When interacting with another user's published article, they can:
-
-- Browse articles
-- Read articles
-- Submit contribution requests
-- Explain proposed changes
-- Revise requested contributions
-- Withdraw pending contributions
-- Track contribution status
-
----
-
-# Core MVP Features
+### Authentication
 
 - User registration and login
-- JWT authentication
-- Shared user accounts
-- Ownership-based authorization
-- Draft and published articles
-- Public article browsing
-- Contribution request workflow
-- Contribution review
-- Article version history
-- Version conflict detection
-- REST API
-- MongoDB persistence
+- JWT bearer authentication
+- Current-user retrieval
+- Password hashing
+- Protected frontend routes
+- Authentication state through React Context
+- Automatic token attachment through the Axios client
 
----
+### Articles
 
-# Contribution Statuses
+- Create and edit an article
+- Save articles as drafts
+- Publish and unpublish owned articles
+- Archive owned articles
+- Browse public published articles
+- Render Markdown content
+- View the authenticated user’s articles
+- Track each article’s current version
 
-- `pending`
-- `changes_requested`
-- `accepted`
-- `rejected`
-- `withdrawn`
+### Contributions
 
----
+- Submit a complete revised article
+- Preserve the base article version and original content snapshot
+- Explain the proposed change
+- View submitted and incoming contributions
+- Compare original and proposed content
+- Accept, reject, or request revisions
+- Revise and resubmit after requested changes
+- Withdraw active contributions
+- Track contribution status
 
-# Article Statuses
+### Version History
 
-- `draft`
-- `published`
-- `archived`
+- Store immutable article snapshots
+- Number versions sequentially
+- Record how each version was created
+- Attribute accepted content to its contributor
+- Record the publisher who approved it
+- Retrieve article version history
+- Prevent acceptance of stale contributions
 
----
+## Resource Statuses
 
-# MVP Workflow
+### Article Status
 
-## Publisher Workflow
+| Status | Meaning |
+|---|---|
+| `draft` | Private working state; not publicly discoverable |
+| `published` | Publicly readable and open for eligible contributions |
+| `archived` | Retained for history but removed from the active public workflow |
 
-1. Register or log in.
-2. Create an article.
-3. Save as draft.
-4. Publish.
-5. Review incoming contribution requests.
-6. Compare current and proposed content.
-7. Accept, reject or request changes.
-8. Accepted contributions create a new article version.
+### Contribution Status
 
-## Contributor Workflow
+| Status | Meaning |
+|---|---|
+| `pending` | Awaiting publisher review |
+| `changes_requested` | Publisher requested a revised proposal |
+| `accepted` | Merged into the article; terminal |
+| `rejected` | Declined by the publisher; terminal |
+| `withdrawn` | Withdrawn by the contributor; terminal |
 
-1. Register or log in.
-2. Browse published articles.
-3. Open an article.
-4. Select **Suggest an Edit**.
-5. Modify a copy of the article.
-6. Explain the proposed improvement.
-7. Submit the contribution.
-8. Track review status.
+## Technology Stack
 
----
+### Frontend
 
-# Technology Stack
-
-## Backend
-
-- Node.js
-- Express.js
-- MongoDB
-- MongoDB Atlas
-- Mongoose
-
-## Authentication & Security
-
-- JWT
-- bcrypt
-- Helmet
-- CORS
-- Zod Validation
-- Express Rate Limit
-
-## Planned Frontend
-
-- React
+- React 19
 - Vite
-- React Router
+- React Router DOM
 - Axios
 - Tailwind CSS
-- Markdown Renderer
-- Text Difference Viewer
+- `@tailwindcss/typography`
+- `react-markdown`
+- ESLint
 
----
+### Backend
 
-# Repository Structure
+- Node.js
+- Express
+- MongoDB / MongoDB Atlas
+- Mongoose
+
+### Authentication and Security
+
+- JSON Web Tokens
+- bcryptjs
+- Helmet
+- CORS
+- Express Rate Limit
+- Zod validation
+- Morgan request logging
+- Environment-based configuration
+
+### Development and Testing
+
+- Nodemon
+- Vitest
+- Supertest
+
+## System Architecture
 
 ```text
-b-hive/
+Browser
+  |
+  v
+React + React Router
+  |
+  v
+Auth Context + Route-Level Pages
+  |
+  v
+Axios API Modules
+  |
+  v
+Express REST API
+  |
+  +--> Security, CORS, Rate Limiting, Logging
+  +--> Authentication and Validation Middleware
+  |
+  v
+Controllers
+  |
+  v
+Services
+  |
+  v
+Mongoose Models
+  |
+  v
+MongoDB Atlas
+```
+
+The frontend never accesses MongoDB directly.
+
+## Repository Structure
+
+```text
+b-hive-mvp/
+├── client/
+│   ├── public/
+│   ├── src/
+│   │   ├── api/
+│   │   ├── assets/
+│   │   ├── components/
+│   │   ├── context/
+│   │   ├── pages/
+│   │   ├── routes/
+│   │   ├── utils/
+│   │   ├── App.jsx
+│   │   ├── index.css
+│   │   └── main.jsx
+│   ├── .env.example
+│   ├── eslint.config.js
+│   ├── package.json
+│   └── vite.config.js
 ├── server/
+│   ├── scripts/
 │   ├── src/
 │   │   ├── config/
+│   │   ├── constants/
 │   │   ├── controllers/
 │   │   ├── middleware/
 │   │   ├── models/
 │   │   ├── routes/
 │   │   ├── services/
-│   │   ├── validators/
 │   │   ├── utils/
+│   │   ├── validators/
 │   │   ├── app.js
 │   │   └── server.js
-│   ├── scripts/
-│   ├── tests/
 │   ├── .env.example
 │   └── package.json
-├── docs/
-│   └── API_DESIGN.md
+├── API_DESIGN.md
 └── README.md
 ```
 
----
+## Frontend Architecture
 
-# Backend Modules
+### `src/api`
 
-- Authentication
-- Articles
-- Contributions
-- Article Versions
+Contains the shared Axios client and feature-specific API modules. Keeping HTTP calls outside page components prevents UI code from becoming tightly coupled to endpoint details.
 
----
+### `src/context`
 
-# MongoDB Collections
+Contains global state providers. `AuthContext` restores authentication, exposes the current user, and provides login, registration, and logout actions.
 
-- users
-- articles
-- contributions
-- articleversions
+### `src/components`
 
----
+Reusable UI grouped by article, contribution, layout, and common presentation concerns.
 
-# Development Roadmap
+### `src/pages`
 
-## Phase 1
-- Project setup
-- Express configuration
-- MongoDB connection
-- Security middleware
-- Error handling
+Route-level screens that coordinate URL parameters, authentication state, API requests, and reusable components.
 
-## Phase 2
-- Authentication
-- Registration
-- Login
-- JWT
-- Ownership middleware
+### `src/routes`
 
-## Phase 3
-- Article CRUD
-- Drafts
-- Publishing
-- Public feed
+Application routing and route guards for public, guest-only, and authenticated pages.
 
-## Phase 4
-- Contribution submission
-- Contribution review
-- Revision requests
-- Merge workflow
+## Backend Architecture
 
-## Phase 5
-- Version history
-- Version conflict detection
-- Testing
+The server follows a layered structure:
 
-## Phase 6
-- React frontend
-- Deployment
-- Documentation
-
----
-
-# Environment Variables
-
-```env
-PORT=
-NODE_ENV=
-MONGODB_URI=
-JWT_SECRET=
-JWT_EXPIRES_IN=
-CLIENT_URL=
+```text
+Route -> Middleware -> Controller -> Service -> Model -> MongoDB
 ```
 
-Never commit real secrets.
+- **Routes** define methods, paths, middleware, and controller bindings.
+- **Middleware** handles authentication, validation, security, and errors.
+- **Controllers** translate HTTP requests into service calls and responses.
+- **Services** own workflow rules, status transitions, ownership checks, conflict checks, and transactions.
+- **Models** define MongoDB schemas, indexes, references, and validation.
 
----
+## MongoDB Collections
 
-# Local Development
+### `users`
+
+Stores account and profile data such as `name`, `email`, hashed `password`, `bio`, `isActive`, and timestamps.
+
+### `articles`
+
+Stores the latest active article state: `title`, `slug`, `summary`, `content`, `publisher`, `status`, `currentVersion`, publication timestamps, and archive timestamps.
+
+### `contributions`
+
+Stores the target article, contributor, base version, original snapshot, proposed content, explanation, status, review metadata, and resubmission count.
+
+### `articleversions`
+
+Stores immutable article snapshots with version number, content metadata, creator attribution, approval attribution, source contribution, change type, and creation time.
+
+## API Overview
+
+Default local API base URL:
+
+```text
+http://localhost:8000/api
+```
+
+Main resource groups:
+
+```text
+/api/auth
+/api/articles
+/api/contributions
+```
+
+Version-history endpoints are exposed through article-related routes. Protected requests require:
+
+```http
+Authorization: Bearer <jwt>
+```
+
+See [`API_DESIGN.md`](./API_DESIGN.md) for endpoint contracts, validation rules, response shapes, authorization rules, models, status transitions, and merge behaviour.
+
+## Environment Variables
+
+### Server
+
+Create `server/.env` from `server/.env.example`:
+
+```env
+PORT=8000
+NODE_ENV=development
+MONGODB_URI=mongodb_connection_string
+JWT_SECRET=long_random_secret
+JWT_EXPIRES_IN=7d
+CLIENT_URL=http://localhost:5173
+```
+
+Never commit real credentials.
+
+### Client
+
+Create `client/.env` from `client/.env.example`:
+
+```env
+VITE_API_BASE_URL=http://localhost:8000/api
+```
+
+Do not place secrets in frontend environment variables.
+
+## Local Development
+
+### Prerequisites
+
+- Node.js
+- npm
+- MongoDB Atlas or another reachable MongoDB instance
+- Git
+
+### Clone and select the full-stack branch
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/purva-06/b-hive-mvp.git
+cd b-hive-mvp
+git checkout develop
+```
 
+### Run the backend
+
+```bash
 cd server
-
 npm install
-
 cp .env.example .env
-
 npm run dev
 ```
 
----
+PowerShell:
 
-# Future Scope
-
-- AI-assisted review
-- Knowledge graph
-- Citation verification
-- Plagiarism assistance
-- Repository collaboration
-- Multiple maintainers
-- Research workspaces
-- Journalism workflows
-- Contributor reputation
-- Opportunity discovery
-- Advanced version comparison
-- Rollback
-- Notifications
-
----
-
-# Security
-
-The backend enforces:
-
-- Password hashing
-- JWT authentication
-- Ownership verification
-- Contribution ownership checks
-- Request validation
-- Secure headers
-- Rate limiting
-- Protected environment variables
-
-The frontend is never trusted for authorization.
-
----
-
-# Documentation
-
-The complete backend architecture, database models and API specification are documented in:
-
-```text
-docs/API_DESIGN.md
+```powershell
+Copy-Item .env.example .env
+npm run dev
 ```
 
----
+### Run the frontend
 
-# License
+Open a second terminal:
 
-To be decided before public release.
+```bash
+cd client
+npm install
+cp .env.example .env
+npm run dev
+```
 
----
+PowerShell:
 
-# Author
+```powershell
+Copy-Item .env.example .env
+npm run dev
+```
+
+The frontend normally runs at `http://localhost:5173`; the API normally runs at `http://localhost:8000`.
+
+## Available Scripts
+
+### Server
+
+```bash
+npm run dev
+npm start
+npm test
+```
+
+### Client
+
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run preview
+```
+
+## Security and Integrity Rules
+
+- Passwords are hashed and excluded from normal responses.
+- JWT authentication is stateless.
+- Ownership is checked server-side.
+- Request bodies are validated before business logic.
+- Contribution transitions are restricted.
+- Historical versions are immutable.
+- Stale-base contributions cannot be silently merged.
+- Contribution acceptance should run in a MongoDB transaction.
+- CORS, secure headers, rate limits, and protected environment variables are used.
+- The frontend is never trusted as the authorization authority.
+
+## Current MVP Limitations
+
+The MVP intentionally excludes:
+
+- AI-assisted review;
+- plagiarism and citation verification;
+- knowledge graphs;
+- article freshness scoring;
+- real-time collaboration;
+- section-level contributions;
+- automatic merge resolution;
+- arbitrary branching;
+- multiple maintainers;
+- organizations;
+- notifications;
+- contributor reputation;
+- recruitment features;
+- media uploads;
+- payments and social feeds.
+
+## Roadmap
+
+### Near-Term Engineering
+
+- Complete full frontend-to-backend workflow verification
+- Add comprehensive API tests
+- Add frontend route and component tests
+- Improve loading, empty, success, and error states
+- Validate responsive and accessible behaviour
+- Add CI for linting, tests, and builds
+- Add production deployment configuration
+- Add OpenAPI documentation or a generated API collection
+- Replace the default `client/README.md`
+
+### Product Expansion
+
+- Section-level contribution requests
+- Multiple maintainers and review teams
+- Review discussion history
+- Arbitrary version comparison
+- Rollback by creating a new version
+- AI-assisted preliminary review
+- Citation and source verification
+- Knowledge relationships
+- Article freshness monitoring
+- Private research workspaces
+- Journalism review workflows
+- Contributor portfolios and opportunity discovery
+
+## License
+
+A final license has not yet been selected. Add a `LICENSE` file before treating the repository as openly reusable.
+
+## Author
 
 **Purva Tripathi**
